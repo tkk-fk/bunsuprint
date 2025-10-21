@@ -20,10 +20,10 @@
     --print-row-gap: 3mm; --print-title-fz: 13pt; --print-meta-fz: 8pt;
     --print-eq-fz: 13pt; --print-no-fz: 9pt;
 
-    /* 1ページ目のヘッダー実測値（JSで上書き） */
+    /* 1ページ目調整用（JSで実測上書き） */
     --print-header-h: 0mm;
 
-    /* Safari回避用（JSで上書き） */
+    /* Safariフォールバック用（JSで上書き） */
     --safari-spacer-mm: 20mm;
     --safari-spacer-first-mm: 20mm;
   }
@@ -44,11 +44,11 @@
   .grid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); align-items:start; }
   .group h3{ margin:0 0 8px; font-size: clamp(14px, 2.1vw, 18px) }
   .btns{ display:flex; flex-wrap:wrap; gap:8px }
-  .btn{ appearance:none; border:1.5px solid var(--ring); background:#fff; color:var(--ink);
+  .btn{ appearance:none; border:1.5px solid var(--ring); background:#fff; color:#0f172a;
         padding:10px 14px; border-radius:12px; cursor:pointer; font-size:15px; font-weight:600; transition:.15s ease; }
   .btn:hover{ transform: translateY(-1px) }
   .btn.active{ background:var(--accent); color:#fff; border-color:transparent }
-  .btn.alt.active{ background:var(--accent-2) }
+  .btn.alt.active{ background: var(--accent-2) }
   .foot{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; margin-top:18px; }
   .primary{ background:var(--accent); color:#fff; border:none; border-radius:14px; padding:12px 16px; font-weight:700; cursor:pointer; font-size:16px;
             box-shadow:0 6px 16px rgba(37,99,235,.22); }
@@ -96,27 +96,43 @@
   [data-view="settings"]{ display:block } [data-view="preview"]{ display:none }
   .mode-preview [data-view="settings"]{ display:none } .mode-preview [data-view="preview"]{ display:block }
 
-  /* ===== 印刷基本指定（共通） ===== */
+  /* ===== 印刷（共通） ===== */
   @page{ size:A4; margin: var(--print-top) var(--print-right) var(--print-bottom) var(--print-left); }
   @media print{
     body{ background:#fff }
     .wrap{ max-width:unset; margin:0; padding:0 }
     .preview-head, .back{ display:none !important }
     .sheet{ box-shadow:none; border-radius:0; padding:0 }
-    .sheet header{ border:none; margin:0 0 var(--print-row-gap); padding:0 }
-    .h-title{ font-size:var(--print-title-fz) } .h-meta{ font-size:var(--print-meta-fz) }
-    .no{ font-size:var(--print-no-fz); color:#475569 } .eq{ font-size:var(--print-eq-fz) }
 
-    /* Chrome等：ページ等分 */
+    /* ヘッダーは印刷時に省スペース化 */
+    .sheet header{ border:none; margin:0 0 var(--print-row-gap); padding:0 }
+    .h-title{ font-size:var(--print-title-fz) }
+    .h-meta{ font-size:var(--print-meta-fz) }
+
+    .no{ font-size:var(--print-no-fz); color:#475569 }
+    .eq{ font-size:var(--print-eq-fz) }
+
+    /* 各ページ（5問を等分） */
     .page{
       height: calc(297mm - var(--print-top) - var(--print-bottom));
       display:grid; grid-template-rows: repeat(5, 1fr);
       row-gap: var(--print-row-gap); margin:0;
       break-after: page; page-break-after: always;
+    }
+
+    /* ★1ページ目だけヘッダー＋下マージンぶんを差し引く */
+    .problems .page:first-child{
+      height: calc(
+        297mm - var(--print-top) - var(--print-bottom)
+        - var(--print-header-h) - var(--print-row-gap)
+      );
+    }
+
     .problems .page:last-child{ break-after:auto; page-break-after:auto; }
 
     .row{ display:grid !important; grid-template-rows:auto 1fr; gap:0; margin:0; break-inside:avoid; page-break-inside:avoid; }
-    .item{ padding:2mm 0; align-items:baseline } .placeholder{ display:none !important }
+    .item{ padding:2mm 0; align-items:baseline }
+    .placeholder{ display:none !important }
     .spacer{ height:auto !important; min-height:0 }
     .page, .item, .spacer{ break-inside:avoid; page-break-inside:avoid }
 
@@ -124,7 +140,7 @@
     .small-note{ display:none }
   }
 
-  /* ===== Safari印刷時は “実測スペーサー” 方式 ===== */
+  /* ===== Safari印刷時は実測スペーサー方式 ===== */
   @media print{
     html.is-safari .page{ display:block !important; height:auto !important; break-after:page; page-break-after:always; }
     html.is-safari .row{ display:block !important; margin:0 0 var(--print-row-gap) 0 !important; }
@@ -133,6 +149,7 @@
     html.is-safari .problems .page:first-child .spacer{ height:var(--safari-spacer-first-mm) !important; }
   }
 
+  /* Safari測定用：印刷サイズのフォントで計測 */
   body.measure-print .no{ font-size:var(--print-no-fz) }
   body.measure-print .eq{ font-size:var(--print-eq-fz) }
 </style>
@@ -220,7 +237,7 @@
     <div class="sheet" id="sheet">
       <header>
         <div class="h-title" id="sheetTitle">分数計算プリント</div>
-        <div class="h-meta" id="sheetMeta"></div>
+        <div class="h-meta" id="sheetMeta">名前：　　　　　　　　　　　　　　　　　　　　　</div>
       </header>
 
       <div class="problems" id="problems"></div>
@@ -305,7 +322,7 @@
     state.withAnswers=false; state.count=5; reflectStateToButtons();
   }
 
-  /* ===== 生成 ===== */
+  /* ===== 問題生成 ===== */
   function generateOne(opMode, commonMode, reduceMode, mixedMode, guard=0){
     if(guard>500) return null;
     const denMin=2, denMax=12;
@@ -356,15 +373,19 @@
       ${left}<span>${p.op}</span>${right}<span>=</span>${ans}</div></div>`;
   }
 
+  /* ===== ヘッダー実測（margin-bottom含む） ===== */
   function setPrintHeaderHeightFromActual(){
     const headerEl=document.querySelector('.sheet header'); if(!headerEl) return;
     requestAnimationFrame(()=>{
-      const px=headerEl.getBoundingClientRect().height || 0;
+      const rect=headerEl.getBoundingClientRect();
+      const mb=parseFloat(getComputedStyle(headerEl).marginBottom)||0; // 下マージンも足す
+      const px=(rect.height||0)+mb;
       const mm=px*(25.4/96);
       document.documentElement.style.setProperty('--print-header-h', mm.toFixed(2)+'mm');
     });
   }
 
+  /* ===== Safari用計測ユーティリティ ===== */
   function pxPerMM(){
     const el=document.createElement('div');
     el.style.cssText='position:absolute;left:-9999px;top:-9999px;width:100mm;height:100mm;';
@@ -406,15 +427,11 @@
     const opLabel=cond.op==='mix'?'足し引きミックス':(cond.op==='+'?'足し算':'引き算');
     title.textContent=`分数の${opLabel}プリント`;
 
-    const meta=document.getElementById('sheetMeta');
-    const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
-    const commonLabel=cond.needCommon==='mix'?'通分ミックス':(cond.needCommon==='true'?'通分あり':'通分なし');
-    const reduceLabel=cond.needReduce==='mix'?'答え約分ミックス':(cond.needReduce==='true'?'（答え）約分あり':'（答え）約分なし');
-    const mixedLabel=cond.mixedMode==='none'?'問題：帯分数なし':(cond.mixedMode==='one'?'問題：帯分数どちらか一方':'問題：帯分数両方');
-    const ansLabel = cond.withAnswers ? '解答：あり' : '解答：なし';
-    meta.textContent=`名前：　　　　　　　　　　　　　　　　　　　　　`;
-
-    document.getElementById('condText').textContent=`条件：${opLabel}／${commonLabel}／${reduceLabel}／${mixedLabel}／${cond.count}問／${ansLabel}`;
+    document.getElementById('condText').textContent=
+      `条件：${opLabel}／${cond.needCommon==='mix'?'通分ミックス':(cond.needCommon==='true'?'通分あり':'通分なし')}／`+
+      `${cond.needReduce==='mix'?'答え約分ミックス':(cond.needReduce==='true'?'（答え）約分あり':'（答え）約分なし')}／`+
+      `${cond.mixedMode==='none'?'帯分数なし':(cond.mixedMode==='one'?'帯分数どちらか一方':'帯分数両方')}／${cond.count}問／`+
+      `${cond.withAnswers?'解答あり':'解答なし'}`;
 
     const root=document.getElementById('problems'); root.innerHTML='';
 
@@ -447,6 +464,7 @@
       }
     }
 
+    // プレビュー構築後に実測して1ページ目を調整
     setPrintHeaderHeightFromActual();
     if(isSafari) tuneSafariSpacer();
   }

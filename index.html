@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1.0,user-scalable=no" />
+<title>分数の足し算・引き算プリントメーカー</title>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f8fafc; --ink:#0f172a; --muted:#475569;
+    --card:#ffffff; --accent:#2563eb; --accent-2:#10b981;
+    --ring:#dbeafe; --radius:18px; --shadow:0 8px 28px rgba(0,0,0,.08);
+
+    /* 画面用 */
+    --gap:12px; --num-fz:12pt; --eq-fz:18pt; --line-h:1.35;
+    --workspacer: clamp(64px, 11vh, 140px);
+
+    /* 印刷用（mm厳密管理） */
+    --print-top: 8mm; --print-right: 10mm; --print-bottom: 6mm; --print-left: 10mm;
+    --print-row-gap: 3mm; --print-title-fz: 13pt; --print-meta-fz: 8pt;
+    --print-eq-fz: 13pt; --print-no-fz: 9pt;
+
+    /* 1ページ目のヘッダー実測値（JSで上書き） */
+    --print-header-h: 0mm;
+
+    /* Safari回避用（JSで上書き） */
+    --safari-spacer-mm: 20mm;
+    --safari-spacer-first-mm: 20mm;
+  }
+
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"BIZ UDPGothic",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic",sans-serif;
+  }
+  .wrap{ max-width: min(1100px, 94vw); margin: 20px auto 56px; padding: 12px; }
+
+  /* ===== 設定カード ===== */
+  .card{ background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow);
+         padding: clamp(14px, 2.6vw, 28px); }
+  .title{ font-size: clamp(18px, 2.6vw, 26px); font-weight:700; margin:0 0 8px }
+  .subtitle{ color:var(--muted); margin: 2px 0 18px; }
+  .grid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); align-items:start; }
+  .group h3{ margin:0 0 8px; font-size: clamp(14px, 2.1vw, 18px) }
+  .btns{ display:flex; flex-wrap:wrap; gap:8px }
+  .btn{ appearance:none; border:1.5px solid var(--ring); background:#fff; color:var(--ink);
+        padding:10px 14px; border-radius:12px; cursor:pointer; font-size:15px; font-weight:600; transition:.15s ease; }
+  .btn:hover{ transform: translateY(-1px) }
+  .btn.active{ background:var(--accent); color:#fff; border-color:transparent }
+  .btn.alt.active{ background:var(--accent-2) }
+  .foot{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; margin-top:18px; }
+  .primary{ background:var(--accent); color:#fff; border:none; border-radius:14px; padding:12px 16px; font-weight:700; cursor:pointer; font-size:16px;
+            box-shadow:0 6px 16px rgba(37,99,235,.22); }
+
+  /* ===== プレビュー ===== */
+  .preview-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; }
+  .actions{ display:flex; gap:8px; flex-wrap:wrap }
+  .back{ background:#fff; border:1.5px solid var(--ring); border-radius:12px; padding:10px 12px; cursor:pointer; font-weight:700 }
+  .print{ background:var(--accent-2); color:#fff; border:none; border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:700 }
+
+  .sheet{ background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding: clamp(14px, 2.4vw, 26px); }
+  .sheet header{ display:flex; justify-content:space-between; align-items:flex-end; gap:8px;
+                 margin-bottom:8px; border-bottom:1px solid #e5e7eb; padding-bottom:8px; }
+  .h-title{ font-size: clamp(18px, 2.6vw, 26px); font-weight:700 }
+  .h-meta{ color:var(--muted); font-size:12px }
+
+  /* ===== 問題（画面） ===== */
+  .problems{ display:block; }
+  .page{ display:block; margin-bottom:14px; }
+  .row{ display:grid; grid-template-columns:1fr; gap:var(--gap); margin-bottom:var(--gap); }
+  @media (min-width:720px){ .row{ grid-template-columns:1fr 1fr; } }
+  .item{ display:flex; gap:10px; align-items:baseline; padding:8px 6px; border-radius:12px; border:none; }
+  .no{ min-width:2.4em; text-align:right; font-size:var(--num-fz); color:#334155 }
+  .eq{ font-size:var(--eq-fz); line-height:var(--line-h); display:flex; align-items:center; gap:.35em; flex-wrap:wrap; word-break:keep-all; }
+
+  /* 分数 */
+  .eq .frac{ display:inline-grid; grid-template-rows:auto auto auto; align-items:center; justify-items:center; line-height:1; vertical-align:middle; padding:0 .15em; }
+  .eq .frac .top{ transform: translateY(.04em) }
+  .eq .frac .bar{ display:block; width:100%; min-width:1.6em; height:0; border-top:2px solid currentColor; margin:.08em 0; }
+  .eq .frac .bot{ transform: translateY(-.02em) }
+
+  /* 帯分数 */
+  .eq .mix{ display:inline-grid; grid-auto-flow:column; align-items:center; gap:.25em; }
+  .eq .mix .whole{ font-weight:700; }
+
+  /* 答え欄 */
+  .eq .ansline{ display:inline-block; min-width:7em; min-height:1.6em; vertical-align:middle; }
+
+  .placeholder{ display:none; }  @media (min-width:720px){ .placeholder{ display:block; } }
+  .spacer{ grid-column:1/-1; height:var(--workspacer); }
+
+  .small-note{ font-size:11px; color:#64748b; margin-top:8px }
+
+  /* ===== 表示切替 ===== */
+  [data-view="settings"]{ display:block } [data-view="preview"]{ display:none }
+  .mode-preview [data-view="settings"]{ display:none } .mode-preview [data-view="preview"]{ display:block }
+
+  /* ===== 印刷基本指定（共通） ===== */
+  @page{ size:A4; margin: var(--print-top) var(--print-right) var(--print-bottom) var(--print-left); }
+  @media print{
+    body{ background:#fff }
+    .wrap{ max-width:unset; margin:0; padding:0 }
+    .preview-head, .back{ display:none !important }
+    .sheet{ box-shadow:none; border-radius:0; padding:0 }
+    .sheet header{ border:none; margin:0 0 var(--print-row-gap); padding:0 }
+    .h-title{ font-size:var(--print-title-fz) } .h-meta{ font-size:var(--print-meta-fz) }
+    .no{ font-size:var(--print-no-fz); color:#475569 } .eq{ font-size:var(--print-eq-fz) }
+
+    /* Chrome等：ページ等分 */
+    .page{
+      height: calc(297mm - var(--print-top) - var(--print-bottom));
+      display:grid; grid-template-rows: repeat(5, 1fr);
+      row-gap: var(--print-row-gap); margin:0;
+      break-after: page; page-break-after: always;
+    }
+    .problems .page:first-child{
+      height: calc(297mm - var(--print-top) - var(--print-bottom) - var(--print-header-h));
+    }
+    .problems .page:last-child{ break-after:auto; page-break-after:auto; }
+
+    .row{ display:grid !important; grid-template-rows:auto 1fr; gap:0; margin:0; break-inside:avoid; page-break-inside:avoid; }
+    .item{ padding:2mm 0; align-items:baseline } .placeholder{ display:none !important }
+    .spacer{ height:auto !important; min-height:0 }
+    .page, .item, .spacer{ break-inside:avoid; page-break-inside:avoid }
+
+    .eq .frac .bar{ border-top-width:1.2pt }
+    .small-note{ display:none }
+  }
+
+  /* ===== Safari印刷時は “実測スペーサー” 方式 ===== */
+  @media print{
+    html.is-safari .page{ display:block !important; height:auto !important; break-after:page; page-break-after:always; }
+    html.is-safari .row{ display:block !important; margin:0 0 var(--print-row-gap) 0 !important; }
+    html.is-safari .item{ padding:2mm 0; }
+    html.is-safari .spacer{ height:var(--safari-spacer-mm) !important; }
+    html.is-safari .problems .page:first-child .spacer{ height:var(--safari-spacer-first-mm) !important; }
+  }
+
+  body.measure-print .no{ font-size:var(--print-no-fz) }
+  body.measure-print .eq{ font-size:var(--print-eq-fz) }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app">
+
+  <!-- ========== 設定ビュー ========== -->
+  <section class="card" data-view="settings" aria-label="設定">
+    <h1 class="title">分数の足し算・引き算プリントメーカー</h1>
+    <p class="subtitle">条件をボタンで選び、「作成」を押すと印刷プレビューが開きます。</p>
+
+    <div class="grid">
+      <div class="group" id="g-op">
+        <h3>計算の種類</h3>
+        <div class="btns" role="group" aria-label="計算の種類">
+          <button class="btn active" data-name="op" data-value="+">足し算</button>
+          <button class="btn" data-name="op" data-value="-">引き算</button>
+          <button class="btn" data-name="op" data-value="mix">ミックス</button>
+        </div>
+      </div>
+
+      <div class="group" id="g-common">
+        <h3>通分</h3>
+        <div class="btns" role="group" aria-label="通分">
+          <button class="btn active" data-name="needCommon" data-value="true">あり</button>
+          <button class="btn" data-name="needCommon" data-value="false">なし</button>
+          <button class="btn" data-name="needCommon" data-value="mix">ミックス</button>
+        </div>
+      </div>
+
+      <div class="group" id="g-reduce">
+        <h3>約分（答えの性質）</h3>
+        <div class="btns" role="group" aria-label="約分">
+          <button class="btn alt active" data-name="needReduce" data-value="true">あり</button>
+          <button class="btn alt" data-name="needReduce" data-value="false">なし</button>
+          <button class="btn alt" data-name="needReduce" data-value="mix">ミックス</button>
+        </div>
+      </div>
+
+      <div class="group" id="g-mixed">
+        <h3>帯分数</h3>
+        <div class="btns" role="group" aria-label="帯分数の出し方">
+          <button class="btn alt" data-name="mixedMode" data-value="none">なし</button>
+          <button class="btn alt active" data-name="mixedMode" data-value="one">どちらか一方</button>
+          <button class="btn alt" data-name="mixedMode" data-value="both">両方</button>
+        </div>
+      </div>
+
+      <div class="group" id="g-answers">
+        <h3>解答ページ</h3>
+        <div class="btns" role="group" aria-label="解答ページ">
+          <button class="btn active" data-name="withAnswers" data-value="false">作らない</button>
+          <button class="btn" data-name="withAnswers" data-value="true">作る</button>
+        </div>
+      </div>
+
+      <div class="group" id="g-count">
+        <h3>問題数</h3>
+        <div class="btns" role="group" aria-label="問題数"></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button class="primary" id="makeBtn">作成</button>
+    </div>
+    <p class="small-note">※ 引き算は負にならないよう自動で並び替えます。印刷は各ページ5問に揃います。</p>
+  </section>
+
+  <!-- ========== プレビュービュー ========== -->
+  <section data-view="preview" aria-label="印刷プレビュー">
+    <div class="preview-head">
+      <div>
+        <div class="title" style="margin:0 0 2px;">印刷プレビュー</div>
+        <div class="subtitle" id="condText">条件：</div>
+      </div>
+      <div class="actions">
+        <button class="back" id="backBtn">設定に戻る</button>
+        <button class="back" id="regenBtn">再作成</button>
+        <button class="print" onclick="window.print()">印刷</button>
+      </div>
+    </div>
+
+    <div class="sheet" id="sheet">
+      <header>
+        <div class="h-title" id="sheetTitle">分数計算プリント</div>
+        <div class="h-meta" id="sheetMeta"></div>
+      </header>
+
+      <div class="problems" id="problems"></div>
+
+      <div class="small-note">© 特別支援教材開発研究所｜学級・ご家庭で自由にお使いください</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  const app = document.getElementById('app');
+
+  /* ===== Safari判定（Chrome/Android除外） ===== */
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  if(isSafari) document.documentElement.classList.add('is-safari');
+
+  /* ===== ユーティリティ ===== */
+  const randInt = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const gcd = (a,b)=>{ a=Math.abs(a); b=Math.abs(b); while(b){ [a,b]=[b,a%b] } return a||1; };
+  const lcm = (a,b)=> Math.abs(a*b)/gcd(a,b);
+
+  function fractionHTML(n,d){
+    return `<span class="frac" aria-label="${n}/${d}">
+      <span class="top">${n}</span><span class="bar"></span><span class="bot">${d}</span></span>`;
+  }
+  function mixedHTML(w,n,d){
+    if(!w||w===0) return fractionHTML(n,d);
+    return `<span class="mix" aria-label="${w}と${n}/${d}">
+      <span class="whole">${w}</span>${fractionHTML(n,d)}</span>`;
+  }
+
+  const addImproper=(N1,D1,N2,D2)=>{ const L=lcm(D1,D2); return { n:N1*(L/D1)+N2*(L/D2), d:L }; };
+  const subImproper=(N1,D1,N2,D2)=>{ const L=lcm(D1,D2); return { n:N1*(L/D1)-N2*(L/D2), d:L }; };
+  const addImproperCalc=(N1,D1,N2,D2,op)=> op==='+'?addImproper(N1,D1,N2,D2):subImproper(N1,D1,N2,D2);
+
+  /* 答え計算（既約＆帯分数） */
+  function solveAnswer(p){
+    const N1=p.w1*p.d1 + p.n1, N2=p.w2*p.d2 + p.n2;
+    const res = addImproperCalc(N1,p.d1,N2,p.d2,p.op);
+    const g = gcd(res.n, res.d);
+    let n = res.n/g, d = res.d/g;
+    const w = Math.floor(n/d); n = n % d;
+    return { w, n, d }; // n==0なら整数
+  }
+
+  /* ===== 状態 ===== */
+  const state = { op:'+', needCommon:'true', needReduce:'true', mixedMode:'one', withAnswers:false, count:5 };
+
+  /* ===== ボタン ===== */
+  function initToggleButtons(){
+    app.querySelectorAll('.btn[data-name]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const name=btn.dataset.name, value=btn.dataset.value, group=btn.parentElement;
+        group.querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        if(name==='op') state.op=value;
+        if(name==='needCommon') state.needCommon=value;
+        if(name==='needReduce') state.needReduce=value;
+        if(name==='mixedMode') state.mixedMode=value;
+        if(name==='withAnswers') state.withAnswers=(value==='true');
+        if(name==='count') state.count=parseInt(value,10);
+      });
+    });
+  }
+  function reflectStateToButtons(){
+    app.querySelectorAll('.btn[data-name]').forEach(btn=>{
+      const name=btn.dataset.name, val=btn.dataset.value;
+      let on=false;
+      if(name==='op') on=(val===state.op);
+      if(name==='needCommon') on=(val===state.needCommon);
+      if(name==='needReduce') on=(val===state.needReduce);
+      if(name==='mixedMode') on=(val===state.mixedMode);
+      if(name==='withAnswers') on=((val==='true')===state.withAnswers);
+      if(name==='count') on=(parseInt(val,10)===state.count);
+      btn.classList.toggle('active', on);
+    });
+  }
+  function applyRecommended(){
+    state.op='+'; state.needCommon='true'; state.needReduce='true'; state.mixedMode='one';
+    state.withAnswers=false; state.count=5; reflectStateToButtons();
+  }
+
+  /* ===== 生成 ===== */
+  function generateOne(opMode, commonMode, reduceMode, mixedMode, guard=0){
+    if(guard>500) return null;
+    const denMin=2, denMax=12;
+    const localOp = (opMode==='mix') ? (Math.random()<0.5?'+':'-') : opMode;
+    const localNeedCommon = (commonMode==='mix') ? (Math.random()<0.5) : (commonMode==='true');
+    const targetReduce = (reduceMode==='mix') ? (Math.random()<0.5) : (reduceMode==='true');
+
+    let d1=randInt(denMin,denMax), d2=localNeedCommon?randInt(denMin,denMax):d1;
+    if(localNeedCommon && d2===d1) return generateOne(opMode,commonMode,reduceMode,mixedMode,guard+1);
+    let n1=randInt(1,d1-1), n2=randInt(1,d2-1);
+
+    let w1=0, w2=0;
+    if(mixedMode==='both'){ w1=randInt(1,5); w2=randInt(1,5); }
+    else if(mixedMode==='one'){ (Math.random()<0.5)?(w1=randInt(1,5)):(w2=randInt(1,5)); }
+
+    const leftVal=w1+n1/d1, rightVal=w2+n2/d2;
+    if(localOp==='-' && leftVal<rightVal){ [w1,n1,d1, w2,n2,d2]=[w2,n2,d2, w1,n1,d1]; }
+
+    const N1=w1*d1+n1, N2=w2*d2+n2;
+    const res=addImproperCalc(N1,d1,N2,d2,localOp);
+    if(res.n<=0) return generateOne(opMode,commonMode,reduceMode,mixedMode,guard+1);
+
+    const reducible=(gcd(res.n,res.d)>1);
+    if(targetReduce && !reducible) return generateOne(opMode,commonMode,reduceMode,mixedMode,guard+1);
+    if(!targetReduce &&  reducible) return generateOne(opMode,commonMode,reduceMode,mixedMode,guard+1);
+
+    return { w1,n1,d1, w2,n2,d2, op:localOp };
+  }
+  function generateAll(count, opMode, commonMode, reduceMode, mixedMode){
+    const arr=[]; for(let i=0;i<count;i++){
+      const q=generateOne(opMode,commonMode,reduceMode,mixedMode);
+      if(!q){ if(arr.length>0) arr.push(arr[arr.length-1]); else i--; } else arr.push(q);
+    } return arr;
+  }
+
+  /* ===== レンダリング ===== */
+  function itemHTMLProblem(idx,p,mixedMode){
+    const left=(mixedMode==='none')?fractionHTML(p.n1,p.d1):mixedHTML(p.w1,p.n1,p.d1);
+    const right=(mixedMode==='none')?fractionHTML(p.n2,p.d2):mixedHTML(p.w2,p.n2,p.d2);
+    return `<div class="item"><div class="no">${idx}.</div><div class="eq">
+      ${left}<span>${p.op}</span>${right}<span>=</span><span class="ansline"></span></div></div>`;
+  }
+  function itemHTMLAnswer(idx,p){
+    const a = solveAnswer(p);
+    const ans = (a.n===0) ? `<strong>${a.w}</strong>` : mixedHTML(a.w,a.n,a.d);
+    const left=mixedHTML(p.w1,p.n1,p.d1), right=mixedHTML(p.w2,p.n2,p.d2);
+    return `<div class="item"><div class="no">${idx}.</div><div class="eq">
+      ${left}<span>${p.op}</span>${right}<span>=</span>${ans}</div></div>`;
+  }
+
+  function setPrintHeaderHeightFromActual(){
+    const headerEl=document.querySelector('.sheet header'); if(!headerEl) return;
+    requestAnimationFrame(()=>{
+      const px=headerEl.getBoundingClientRect().height || 0;
+      const mm=px*(25.4/96);
+      document.documentElement.style.setProperty('--print-header-h', mm.toFixed(2)+'mm');
+    });
+  }
+
+  function pxPerMM(){
+    const el=document.createElement('div');
+    el.style.cssText='position:absolute;left:-9999px;top:-9999px;width:100mm;height:100mm;';
+    document.body.appendChild(el);
+    const r=el.getBoundingClientRect(); document.body.removeChild(el);
+    return r.height/100;
+  }
+  function cssMM(varName){
+    const v=getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    if(v.endsWith('mm')) return parseFloat(v);
+    if(v.endsWith('px')) return parseFloat(v)/(pxPerMM());
+    const n=parseFloat(v); return Number.isFinite(n)?n:0;
+  }
+  function tuneSafariSpacer(){
+    document.body.classList.add('measure-print');
+    const sample=document.querySelector('.problems .page .item');
+    const itemPx = sample ? sample.getBoundingClientRect().height : 24;
+    document.body.classList.remove('measure-print');
+    const mmPerPx = 1/pxPerMM();
+    const itemMM = itemPx * mmPerPx;
+
+    const topMM=cssMM('--print-top'), bottomMM=cssMM('--print-bottom'), gapMM=cssMM('--print-row-gap');
+    const headerPx=(document.querySelector('.sheet header')?.getBoundingClientRect().height||0);
+    const headerMM=headerPx*mmPerPx;
+
+    const PAGE=297, rows=5, gapTotal=gapMM*(rows-1);
+    const availFirst=PAGE-topMM-bottomMM-headerMM;
+    const availOther=PAGE-topMM-bottomMM;
+
+    const spacerFirst=Math.max(6,(availFirst-rows*itemMM-gapTotal)/rows);
+    const spacerOther=Math.max(6,(availOther-rows*itemMM-gapTotal)/rows);
+
+    document.documentElement.style.setProperty('--safari-spacer-first-mm', spacerFirst.toFixed(2)+'mm');
+    document.documentElement.style.setProperty('--safari-spacer-mm', spacerOther.toFixed(2)+'mm');
+  }
+
+  function buildPreview(problems,cond){
+    const title=document.getElementById('sheetTitle');
+    const opLabel=cond.op==='mix'?'足し引きミックス':(cond.op==='+'?'足し算':'引き算');
+    title.textContent=`分数の${opLabel}プリント`;
+
+    const meta=document.getElementById('sheetMeta');
+    const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
+    const commonLabel=cond.needCommon==='mix'?'通分ミックス':(cond.needCommon==='true'?'通分あり':'通分なし');
+    const reduceLabel=cond.needReduce==='mix'?'答え約分ミックス':(cond.needReduce==='true'?'（答え）約分あり':'（答え）約分なし');
+    const mixedLabel=cond.mixedMode==='none'?'問題：帯分数なし':(cond.mixedMode==='one'?'問題：帯分数どちらか一方':'問題：帯分数両方');
+    const ansLabel = cond.withAnswers ? '解答：あり' : '解答：なし';
+    meta.textContent=`名前：　　　　　　　　　　　　　　　　　　　　　`;
+
+    document.getElementById('condText').textContent=`条件：${opLabel}／${commonLabel}／${reduceLabel}／${mixedLabel}／${cond.count}問／${ansLabel}`;
+
+    const root=document.getElementById('problems'); root.innerHTML='';
+
+    // 5問ずつ：問題ページ →（オプション）解答ページ
+    for(let p=0; p<problems.length; p+=5){
+      const slice = problems.slice(p, p+5);
+
+      // 問題ページ
+      const pageQ=document.createElement('div'); pageQ.className='page';
+      slice.forEach((prob,idx)=>{
+        const row=document.createElement('div'); row.className='row';
+        row.insertAdjacentHTML('beforeend', itemHTMLProblem(p+idx+1,prob,cond.mixedMode));
+        const ph=document.createElement('div'); ph.className='placeholder'; row.appendChild(ph);
+        const sp=document.createElement('div'); sp.className='spacer'; row.appendChild(sp);
+        pageQ.appendChild(row);
+      });
+      root.appendChild(pageQ);
+
+      // 解答ページ（直後）
+      if(cond.withAnswers){
+        const pageA=document.createElement('div'); pageA.className='page';
+        slice.forEach((prob,idx)=>{
+          const row=document.createElement('div'); row.className='row';
+          row.insertAdjacentHTML('beforeend', itemHTMLAnswer(p+idx+1,prob));
+          const ph=document.createElement('div'); ph.className='placeholder'; row.appendChild(ph);
+          const sp=document.createElement('div'); sp.className='spacer'; row.appendChild(sp);
+          pageA.appendChild(row);
+        });
+        root.appendChild(pageA);
+      }
+    }
+
+    setPrintHeaderHeightFromActual();
+    if(isSafari) tuneSafariSpacer();
+  }
+
+  /* ===== 画面遷移 ===== */
+  const toPreview = ()=> document.body.classList.add('mode-preview');
+  const toSettings= ()=> document.body.classList.remove('mode-preview');
+
+  /* ===== イベント ===== */
+  document.getElementById('makeBtn').addEventListener('click', ()=>{
+    const probs=generateAll(state.count,state.op,state.needCommon,state.needReduce,state.mixedMode);
+    buildPreview(probs,{...state}); toPreview();
+  });
+  document.getElementById('regenBtn').addEventListener('click', ()=>{
+    const probs=generateAll(state.count,state.op,state.needCommon,state.needReduce,state.mixedMode);
+    buildPreview(probs,{...state});
+  });
+  document.getElementById('backBtn').addEventListener('click', toSettings);
+
+  window.addEventListener('beforeprint', ()=>{
+    setPrintHeaderHeightFromActual();
+    if(isSafari) tuneSafariSpacer();
+  });
+
+  /* ===== 初期化 ===== */
+  (function init(){
+    // 問題数ボタン（5〜50）
+    const wrap=document.querySelector('#g-count .btns'); wrap.innerHTML='';
+    for(let n=5;n<=50;n+=5){
+      const b=document.createElement('button');
+      b.className='btn'+(n===state.count?' active':''); b.dataset.name='count'; b.dataset.value=String(n); b.textContent=String(n);
+      wrap.appendChild(b);
+    }
+    initToggleButtons(); applyRecommended();
+  })();
+})();
+</script>
+
+</body>
+</html>
